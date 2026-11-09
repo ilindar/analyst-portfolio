@@ -31,3 +31,18 @@
 
 ## 📦 Артефакты проекта
 
+Ниже представлены основные документы, демонстрирующие глубину проработки:
+
+*   📘 **[Техническое задание (PDF)](./ТЗ_Аметистовая_жаба_v1.0.pdf)** — Полное описание требований (v0.8), включая User Stories, НФТ и юридические аспекты.
+*   🗄️ **[Схема БД (DDL)](./database_schema.sql)** — Готовый SQL-скрипт для PostgreSQL 16+. Включает ENUM-типы, партиционирование логов, частичные уникальные индексы для Soft Delete и JSONB-поля.
+*   🌐 **[OpenAPI 3.1 (YAML)](./openapi.yaml)** — Контракт REST API. Описаны все эндпоинты (публичные, админские, вебхуки), схемы валидации (Pydantic-style) и унифицированные форматы ошибок.
+
+### 📊 Схемы и диаграммы
+*   [Use Case диаграмма](./diagrams/1_UseCase.png)
+*   [UML: Генерация расклада](./diagrams/2_UML_Spread_Generation.png)
+*   [UML: Инициация оплаты и вебхук](./diagrams/3_UML_Payment_Webhook.png)
+*   [UML: Работа воркера (нейросеть и почта)](./diagrams/4_UML_Worker_LLM_Email.png)
+*   [UML: Ожидание результата (Polling)](./diagrams/5_UML_Polling_Result.png)
+*   [State Machine: Высокоуровневый жизненный цикл](./diagrams/6_State_Machine_HighLevel.png)
+*   [State Machine: Оплата и очереди](./diagrams/7_Payment_Flow_Queues.png)
+*   [State Machine: Работа воркера и ретраи](./diagrams/8_State_Machine_Worker_Retry.png)
