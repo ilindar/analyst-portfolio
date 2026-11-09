@@ -1,0 +1,1393 @@
+openapi: 3.1.0
+info:
+  title: Ametistovaya Zhaba API
+  description: |
+    API для AI-сервиса раскладов Таро «Аметистовая жаба».
+    Все успешные ответы (HTTP 2xx) оборачиваются в объект `data`. 
+    Все ошибки (HTTP 4xx, 5xx) — в объект `error`.
+  version: 1.0.0
+  contact:
+    name: Ильиных Дарья
+    email: support@ametistovaya-zhaba.ru
+
+servers:
+  - url: https://api.ametistovaya-zhaba.ru/v1
+    description: Production server
+  - url: http://localhost:8000/v1
+    description: Local development
+
+tags:
+  - name: Public - Config
+    description: Получение настроек и контента
+  - name: Public - Auth
+    description: Идентификация анонимных пользователей
+  - name: Public - Decks & Cards
+    description: Просмотр колод и карт
+  - name: Public - Spreads
+    description: Создание раскладов и получение толкований
+  - name: Public - Payments
+    description: Оплата толкований
+  - name: Public - Support
+    description: Обратная связь
+  - name: Webhooks
+    description: Эндпоинты для внешних систем
+  - name: Admin
+    description: Административные методы (требуют сессионной cookie и CSRF-токена)
+
+security:
+  - VisitorTokenAuth: []
+
+paths:
+  # ==========================================
+  # Конфигурация и контент
+  # ==========================================
+  /config/price:
+    get:
+      tags: [Public - Config]
+      summary: Получить актуальную цену AI-толкования
+      security: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      amount:
+                        type: number
+                        format: float
+                        example: 159.00
+                      currency:
+                        type: string
+                        example: RUB
+
+  /about:
+    get:
+      tags: [Public - Config]
+      summary: Получить контент страницы «О проекте»
+      security: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      content_blocks:
+                        type: array
+                        items:
+                          type: object
+                      faq:
+                        type: array
+                        items:
+                          type: object
+                      taxpayer_info:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          inn:
+                            type: string
+                          status:
+                            type: string
+
+  /legal/{slug}:
+    get:
+      tags: [Public - Config]
+      summary: Получить актуальную версию юридического документа
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [offer, refund-policy, user-agreement]
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      slug:
+                        type: string
+                      title:
+                        type: string
+                      content:
+                        type: string
+                      version:
+                        type: string
+                      updated_at:
+                        type: string
+                        format: date-time
+
+  # ==========================================
+  # Идентификация
+  # ==========================================
+  /consent:
+    post:
+      tags: [Public - Auth]
+      summary: Сохранить согласие на сбор fingerprint
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentRequest'
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+
+  /visitors/me:
+    get:
+      tags: [Public - Auth]
+      summary: Получить статус текущего анонимного пользователя
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/VisitorStatus'
+
+  # ==========================================
+  # Колоды и Карты
+  # ==========================================
+  /decks:
+    get:
+      tags: [Public - Decks & Cards]
+      summary: Получить список активных колод
+      security: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DeckResponse'
+
+  /decks/{deck_id}/cards:
+    get:
+      tags: [Public - Decks & Cards]
+      summary: Получить список карт конкретной колоды
+      security: []
+      parameters:
+        - name: deck_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: suit
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CardResponse'
+
+  /cards/draw:
+    post:
+      tags: [Public - Decks & Cards]
+      summary: Вытянуть случайную карту
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DrawCardRequest'
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/CardResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==========================================
+  # Расклады и Толкование
+  # ==========================================
+  /tags:
+    get:
+      tags: [Public - Spreads]
+      summary: Получить список всех уникальных тегов
+      security: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        normalized_name:
+                          type: string
+                        display_name:
+                          type: string
+
+  /spreads:
+    get:
+      tags: [Public - Spreads]
+      summary: Получить список доступных раскладов
+      security: []
+      parameters:
+        - name: tag
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: deck_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SpreadResponse'
+
+  /spreads/generate:
+    post:
+      tags: [Public - Spreads]
+      summary: Создать новый сгенерированный расклад (вытянуть карты)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpreadGenerateRequest'
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/GeneratedSpreadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /spreads/{generated_spread_id}/interpretation:
+    post:
+      tags: [Public - Spreads]
+      summary: Запросить AI-толкование (бесплатное или платное)
+      parameters:
+        - name: generated_spread_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InterpretationRequest'
+      responses:
+        '200':
+          description: Успешно (идемпотентный повтор или постановка в очередь)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/InterpretationResponse'
+        '402':
+          $ref: '#/components/responses/PaymentRequired'
+        '403':
+          description: Требуется согласие на сбор данных (fingerprint) для использования бесплатного лимита
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: CONSENT_REQUIRED
+                  message: Для получения бесплатного толкования необходимо согласие на обработку данных браузера
+                  details: null
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /spreads/{generated_spread_id}/status:
+    get:
+      tags: [Public - Spreads]
+      summary: Проверить статус генерации AI-толкования (Polling)
+      parameters:
+        - name: generated_spread_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/StatusResponse'
+
+  /spreads/{generated_spread_id}/view:
+    get:
+      tags: [Public - Spreads]
+      summary: Получить текст толкования по токену
+      security: []
+      parameters:
+        - name: generated_spread_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: token
+          in: query
+          required: true
+          description: JWT result_access_token. Конфиденциальный параметр. Подлежит маскированию в логах.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ViewResultResponse'
+        '403':
+          description: Токен недействителен или истек
+
+  /spreads/latest-unviewed:
+    get:
+      tags: [Public - Spreads]
+      summary: Запросить баннер на главной с непросмотренным результатом
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: [object, "null"]
+                    properties:
+                      generated_spread_id:
+                        type: string
+                        format: uuid
+                      created_at:
+                        type: string
+                        format: date-time
+                      masked_email:
+                        type: string
+
+  /spreads/{id}/verify-email:
+    post:
+      tags: [Public - Spreads]
+      summary: Подтвердить email для просмотра непросмотренного расклада
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Успешно (возвращает токен и текст)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      result_access_token:
+                        type: string
+                      interpretation_text:
+                        type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  # ==========================================
+  # Платежи
+  # ==========================================
+  /payments/create:
+    post:
+      tags: [Public - Payments]
+      summary: Создать платеж в ЮKassa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCreateRequest'
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentCreateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /payments/verify:
+    post:
+      tags: [Public - Payments]
+      summary: Принудительно проверить актуальный статус платежа в ЮKassa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payment_id]
+              properties:
+                payment_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      payment_status:
+                        type: string
+                        enum: [pending, succeeded, canceled, refunded]
+                      generation_status:
+                        type: string
+                        enum: [AWAITING_PAYMENT, PAYMENT_PENDING, QUEUED, PROCESSING, RETRY_WAIT, COMPLETED, FAILED, FAILED_VALIDATION, CANCELED]
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '502':
+          description: Ошибка при обращении к API ЮKassa
+
+  # ==========================================
+  # Поддержка
+  # ==========================================
+  /support/tickets:
+    post:
+      tags: [Public - Support]
+      summary: Отправить обращение через форму обратной связи
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, contact_channel, message]
+              properties:
+                email:
+                  type: string
+                  format: email
+                name:
+                  type: string
+                contact_channel:
+                  type: string
+                  enum: [email, telegram]
+                telegram_username:
+                  type: string
+                subject:
+                  type: string
+                message:
+                  type: string
+      responses:
+        '200':
+          description: Успешно
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  # ==========================================
+  # Вебхуки
+  # ==========================================
+  /webhooks/yookassa:
+    post:
+      tags: [Webhooks]
+      summary: Эндпоинт для приема уведомлений от ЮKassa
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [payment.succeeded, payment.canceled, refund.succeeded]
+                object:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    status:
+                      type: string
+                    metadata:
+                      type: object
+                      properties:
+                        generated_spread_id:
+                          type: string
+                        visitor_id:
+                          type: string
+      responses:
+        '200':
+          description: Успешно
+        '403':
+          description: Ошибка валидации подписи или IP
+
+  # ==========================================
+  # Административное API
+  # ==========================================
+  /admin/auth/login:
+    post:
+      tags: [Admin]
+      summary: Вход в админ-панель
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      admin_id:
+                        type: string
+                      email:
+                        type: string
+                      csrf_token:
+                        type: string
+
+  /admin/auth/csrf:
+    get:
+      tags: [Admin]
+      summary: Восстановить CSRF-токен для текущей сессии
+      security:
+        - AdminSessionAuth: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      csrf_token:
+                        type: string
+        '401':
+          description: Сессия истекла или невалидна
+
+  /admin/payments:
+    get:
+      tags: [Admin]
+      summary: История платежей
+      security:
+        - AdminSessionAuth: []
+        - CsrfTokenAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: possible_duplicate
+          in: query
+          description: Фильтр по дублирующим оплатам
+          schema:
+            type: boolean
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, succeeded, canceled, refunded]
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: search
+          in: query
+          description: Поиск по yookassa_id, visitor_id, generated_spread_id, email
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminPaymentResponse'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+  /admin/generated-spreads/{id}/cancel:
+    post:
+      tags: [Admin]
+      summary: Ручная отмена зависшего снимка расклада
+      security:
+        - AdminSessionAuth: []
+        - CsrfTokenAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Успешно (статус изменен на CANCELED, cancel_reason = ADMIN_MANUAL)
+        '400':
+          description: Снимок находится в статусе, который нельзя отменить
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/logs:
+    get:
+      tags: [Admin]
+      summary: Просмотр логов аудита
+      security:
+        - AdminSessionAuth: []
+        - CsrfTokenAuth: []
+      parameters:
+        - name: actor_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: is_audit
+          in: query
+          schema:
+            type: boolean
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LogResponse'
+
+  /admin/about:
+    put:
+      tags: [Admin]
+      summary: Обновить контент страницы «О проекте»
+      security:
+        - AdminSessionAuth: []
+        - CsrfTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AboutContentRequest' # Ссылка на схему
+      responses:
+        '200':
+          description: Успешно обновлено
+
+  /admin/outbox:
+    get:
+      tags: [Admin]
+      summary: Список событий Outbox (фильтр по статусу FAILED)
+      security:
+        - AdminSessionAuth: []
+        - CsrfTokenAuth: []
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OutboxEventResponse'
+
+  /admin/outbox/{id}/retry:
+    post:
+      tags: [Admin]
+      summary: Переотправить Outbox-событие
+      security:
+        - AdminSessionAuth: []
+        - CsrfTokenAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Успешно
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/legal-docs/{slug}:
+    put:
+      tags: [Admin]
+      summary: Обновить юридический документ (создать новую версию)
+      security:
+        - AdminSessionAuth: []
+        - CsrfTokenAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [offer, refund-policy, user-agreement]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, content]
+              properties:
+                title:
+                  type: string
+                content:
+                  type: string
+                  description: Markdown-текст документа. Санитизация HTML выполняется на стороне сервера.
+      responses:
+        '200':
+          description: Успешно (возвращает новую версию)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalDocumentVersionResponse'
+
+  /admin/legal-docs/{slug}/history:
+    get:
+      tags: [Admin]
+      summary: Получить историю версий юридического документа
+      security:
+        - AdminSessionAuth: []
+        - CsrfTokenAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [offer, refund-policy, user-agreement]
+      responses:
+        '200':
+          description: Успешно
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LegalDocumentVersionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    VisitorTokenAuth:
+      type: apiKey
+      in: cookie
+      name: visitor_token
+    AdminSessionAuth:
+      type: apiKey
+      in: cookie
+      name: admin_session
+    CsrfTokenAuth:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+
+  responses:
+    BadRequest:
+      description: Ошибка валидации данных
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    PaymentRequired:
+      description: Требуется оплата (бесплатный лимит исчерпан)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: PAYMENT_REQUIRED
+              message: Для получения толкования требуется оплата
+              details:
+                status: PAYMENT_PENDING
+                price: "159.00"
+    NotFound:
+      description: Сущность не найдена
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Доступ запрещен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Конфликт состояния
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimited:
+      description: Слишком много запросов
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServiceUnavailable:
+      description: Сервис временно недоступен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+
+    PaginationMeta:
+      type: object
+      properties:
+        total_items:
+          type: integer
+        total_pages:
+          type: integer
+        current_page:
+          type: integer
+        limit:
+          type: integer
+
+    ConsentRequest:
+      type: object
+      required: [consent]
+      properties:
+        consent:
+          type: boolean
+        fingerprint_hash:
+          type: [string, "null"]
+
+    VisitorStatus:
+      type: object
+      properties:
+        visitor_id:
+          type: string
+          format: uuid
+        free_interpretation_used:
+          type: boolean
+        free_interpretation_pending:
+          type: boolean
+        active_free_generated_spread_id:
+          type: [string, "null"]
+          format: uuid
+        cookie_consent_given:
+          type: boolean
+
+    DeckResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        author:
+          type: string
+        type:
+          type: string
+          enum: [tarot, oracle, playing_cards, other]
+        max_cards:
+          type: integer
+        allow_reversed:
+          type: boolean
+        suits:
+          type: [array, "null"]
+          items:
+            type: string
+        description:
+          type: string
+
+    CardResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        deck_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        suit:
+          type: [string, "null"]
+        short_description:
+          type: string
+        full_description:
+          type: string
+        number:
+          type: [integer, "null"]
+        reversed_short_description:
+          type: [string, "null"]
+        reversed_full_description:
+          type: [string, "null"]
+        image_url_thumb:
+          type: [string, "null"]
+          format: uri
+        image_url_medium:
+          type: [string, "null"]
+          format: uri
+        image_url_original:
+          type: [string, "null"]
+          format: uri
+
+    DrawCardRequest:
+      type: object
+      required: [deck_id]
+      properties:
+        deck_id:
+          type: string
+          format: uuid
+        suit:
+          type: [string, "null"]
+
+    SpreadResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        amount:
+          type: integer
+        tags:
+          type: array
+          items:
+            type: object
+        image_url:
+          type: string
+        info:
+          type: [string, "null"]
+        favorite_deck_ids:
+          type: [array, "null"]
+          items:
+            type: string
+            format: uuid
+
+    SpreadGenerateRequest:
+      type: object
+      required: [spread_id, deck_id]
+      properties:
+        spread_id:
+          type: string
+          format: uuid
+        deck_id:
+          type: string
+          format: uuid
+      additionalProperties: false
+
+    GeneratedSpreadResponse:
+      type: object
+      properties:
+        generated_spread_id:
+          type: string
+          format: uuid
+        spread_name:
+          type: string
+        deck_name:
+          type: string
+        cards:
+          type: array
+          items:
+            type: object
+            properties:
+              position_number:
+                type: integer
+              position_name:
+                type: string
+              card_name:
+                type: string
+              suit:
+                type: string
+              is_reversed:
+                type: boolean
+              short_description:
+                type: string
+
+    InterpretationRequest:
+      type: object
+      required: [email, personal_data_consent]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        user_context:
+          type: string
+          maxLength: 1500
+        personal_data_consent:
+          type: boolean
+          description: Явное согласие на обработку персональных данных (должно быть true). При false возвращается ошибка VALIDATION_ERROR.
+      additionalProperties: false
+
+    InterpretationResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [QUEUED, PROCESSING, COMPLETED, RETRY_WAIT, FAILED, FAILED_VALIDATION]
+        requires_payment:
+          type: boolean
+        price:
+          type: [string, "null"]
+
+    StatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [QUEUED, PROCESSING, COMPLETED, FAILED, FAILED_VALIDATION, CANCELED]
+        queue_position:
+          type: [integer, "null"]
+          description: Позиция задачи в очереди. Возвращается null, если задача уже выполняется или завершена.
+        estimated_wait_seconds:
+          type: [integer, "null"]
+          description: Ожидаемое время ожидания в секундах. Рассчитывается как (количество задач перед пользователем) * 30 сек. Возвращается null, если задача уже выполняется или завершена.
+        is_high_load:
+          type: [boolean, "null"]
+          description: Флаг, указывающий на перегрузку очереди (превышение MAX_HARD_QUEUE_LIMIT).
+        error_code:
+          type: [string, "null"]
+          description: Код ошибки, если задача упала (например, TIMEOUT_STALE, LLM_CONTEXT_OVERFLOW).
+        cancel_reason:
+          type: [string, "null"]
+          description: Причина отмены (TTL_EXPIRED, ADMIN_MANUAL). Заполняется только если status = CANCELED.
+
+    ViewResultResponse:
+      type: object
+      properties:
+        interpretation_text:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        spread_name:
+          type: string
+
+    PaymentCreateRequest:
+      type: object
+      required: [generated_spread_id, email, expected_amount, offer_agreed]
+      properties:
+        generated_spread_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        expected_amount:
+          type: number
+          format: float
+          example: 159.00
+        offer_agreed:
+          type: boolean
+      additionalProperties: false
+
+    PaymentCreateResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            payment_id:
+              type: string
+              format: uuid
+            confirmation_url:
+              type: string
+              format: uri
+
+    AdminPaymentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        yookassa_id:
+          type: string
+        amount:
+          type: number
+        status:
+          type: string
+          enum: [pending, succeeded, canceled, refunded]
+        created_at:
+          type: string
+          format: date-time
+        generated_spread_id:
+          type: string
+          format: uuid
+        visitor_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        offer_version:
+          type: string
+        possible_duplicate_payment:
+          type: boolean
+          description: Флаг дублирующей оплаты (требуется ручной возврат)
+        generation_status:
+          type: string
+          description: Текущий статус снимка расклада
+
+    LogResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+        level:
+          type: string
+          enum: [INFO, WARN, ERROR]
+        event_type:
+          type: string
+        actor_id:
+          type: [string, "null"]
+          format: uuid
+        success:
+          type: boolean
+        description:
+          type: string
+        payload:
+          type: [object, "null"]
+
+    OutboxEventResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, PROCESSED, FAILED]
+        retry_count:
+          type: integer
+        last_error:
+          type: [string, "null"]
+        created_at:
+          type: string
+          format: date-time
+
+    LegalDocumentVersionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: string
+          example: "1.2"
+        is_active:
+          type: boolean
+          description: Флаг, указывающий, является ли эта версия актуальной
+        content:
+          type: string
+          description: Markdown-текст документа
+        updated_at:
+          type: string
+          format: date-time
+
+    AboutContentRequest:
+      type: object
+      properties:
+        content_blocks:
+          type: array
+          description: Контент страницы «О проекте». Серверная санитизация HTML обязательна.
+          items:
+            type: object
+        faq:
+          type: array
+          description: Блок FAQ. Серверная санитизация HTML обязательна.
+          items:
+            type: object
